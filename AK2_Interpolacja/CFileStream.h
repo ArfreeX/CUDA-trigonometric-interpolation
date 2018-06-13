@@ -9,7 +9,7 @@ public:
 	~CFileStream();
 	void openFile();
 	double* readData(double* array, int & size);
-	void write(int* array, int size);
+	void write(double* array, int size);
 	
 
 private:

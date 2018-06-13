@@ -8,6 +8,7 @@
 
 
 #define BLOCK_SIZE 512 // needs to be checked for proper values
+#define MAX_ELEMENT 1000 // random()
 
 __global__ void computeA(double* arrayA, double* arrayOfPoints, double* argumentsArray, int degree, int size)
 {
@@ -67,6 +68,13 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	dim3 numBlocks((2 * size + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
 
+	// Arguments * 2Pi/size && filling values
+	for (int i = 0; i < size; ++i)
+	{
+		argumentsArray[i] = ((2 * PI) / (double)size) * arrayOfPoints[i];
+	}
+
+
 	// Cuda allocation
 	auto err = cudaMalloc(&d_arrayOfPoints, size_bytes);
 	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
@@ -79,16 +87,6 @@ void trigInterpolation(double *arrayOfPoints, int size)
 
 	err = cudaMalloc(&d_argumentsArray, size_bytes / 2);
 	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
-
-
-
-
-	// Arguments * 2Pi/size && filling values
-	for (int i = 0; i < size; ++i)
-	{
-		argumentsArray[i] = ((2 * PI) / (double)size) * arrayOfPoints[i];
-	}
-
 
 
 
@@ -106,7 +104,6 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
 	// Main algorithm code
-
 
 
 	//============== CUDA ==============
@@ -129,11 +126,11 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	//==================================
 	// Results check
 
-	std::cout << "\n\n";
+	/*std::cout << "\n\n";
 	for (int i = 0; i < degree; i++)
 		std::cout << arrayA[i] << "\n";
 	for (int i = 0; i < degree; i++)
-		std::cout << arrayB[i] << "\n";
+		std::cout << arrayB[i] << "\n";*/
 	//==================================
 
 
@@ -220,11 +217,11 @@ void trigInterpolationScalar(double *arrayOfPoints, int size)
 
 	//==================================
 	// Test poprawnosci wynikow
-	std::cout << "\n\n";
+	/*std::cout << "\n\n";
 	for (int i = 0; i < 3; i++)
 		std::cout << arrayA[i] << "\n";
 	for (int i = 0; i < 3; i++)
-		std::cout << arrayB[i] << "\n";
+		std::cout << arrayB[i] << "\n";*/
 	//==================================
 
 
@@ -254,9 +251,11 @@ void trigInterpolationScalar(double *arrayOfPoints, int size)
 	}
 
 	if (size % 2)
-		std::cout << " + " << arrayA[degree] << "*cos( " << degree << "x ) + " << arrayB[degree] << "sin( " << degree << "x )\n\n";
+		std::cout << " + " << arrayA[degree] << "*cos( " << degree << "x ) + " 
+		<< arrayB[degree] << "sin( " << degree << "x )\n\n";
 	else
-		std::cout << " + " << arrayA[degree] / 2.0 << "*cos( " << degree << "x )\n\n";
+		std::cout << " + " << arrayA[degree] / 2.0 
+		<< "*cos( " << degree << "x )\n\n";
 
 
 	delete[] arrayA;
@@ -267,19 +266,42 @@ void trigInterpolationScalar(double *arrayOfPoints, int size)
 
 void showMatrix(double *array, int size);
 double* readData(double* array, int &size);
+void randomMatrixToFile(int size);
 
 int main()
 {
+	CMeasure time;
 	double * arrayOfPoints = nullptr;
-	int size = 0;
+	int size;
+	
+	
+	/*std::cout << "Rozmiar danych testowych: ";
+	std::cin >> size;
+	std::cout << "\nPodaj nazwe pliku testowego: ";
+	randomMatrixToFile(size);*/
+
 	arrayOfPoints = readData(arrayOfPoints, size);
 
 	showMatrix(arrayOfPoints, size);
 
+	time.start();
 	trigInterpolation(arrayOfPoints, size);
+	auto time_CUDA = time.elapsed();
+
+	time.start();
 	trigInterpolationScalar(arrayOfPoints, size);
-	system("PAUSE");
+	auto time_SCALAR = time.elapsed();
+
+
+
+	std::cout << " CUDA time:\t" << time_CUDA / 1000000000.0 
+		<< "\nSCALAR time:\t" << time_SCALAR / 1000000000.0 << std::endl;
+	
+	
 	delete[] arrayOfPoints;
+
+
+	system("PAUSE");
 	return 0;
 }
 
@@ -290,6 +312,28 @@ int main()
 //==========================================================
 //==========================================================
 //==========================================================
+
+void randomMatrixToFile(int size)
+{
+	CFileStream file;
+	const int SEED = 12412423;
+	srand(SEED);
+	double *matrix = new double[size*2];
+
+	int j = 0 - size/2;
+	for (int i = 0; i < size*2; ++i)
+	{
+		matrix[i++] = j++;
+		if ( rand() % MAX_ELEMENT > MAX_ELEMENT/2 )
+			matrix[i] = (double)((rand() % MAX_ELEMENT + 1) * (rand() % MAX_ELEMENT + 1)) / (MAX_ELEMENT);
+		else
+			matrix[i] = (double)(-1 * (rand() % MAX_ELEMENT + 1) * (rand() % MAX_ELEMENT + 1)) / (MAX_ELEMENT);
+		
+	}
+
+	file.write(matrix, size);
+	delete[] matrix;
+}
 
 void showMatrix(double *array, int size)
 {

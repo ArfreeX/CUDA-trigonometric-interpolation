@@ -27,7 +27,7 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -90,10 +90,12 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CFileStream.cpp" />
+    <ClCompile Include="CMeasure.cpp" />
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CFileStream.h" />
+    <ClInclude Include="CMeasure.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
