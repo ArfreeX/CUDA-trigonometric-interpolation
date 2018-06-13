@@ -4,53 +4,131 @@
 
 #include <stdio.h>
 #include <iostream>
+#include <math.h>
 
+
+#define BLOCK_SIZE 8 // needs to be checked for proper values
+
+__global__ void computeA(double* arrayA, double* arrayOfPoints, double* argumentsArray, int degree, int size)
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < degree + 1)
+	{
+		double sum = 0;
+
+		for (int i = 0; i < size; i++)	// petla do zrownoleglenia
+		{
+			sum += (arrayOfPoints[size + i] * cos(x * argumentsArray[i]));
+		}
+
+		arrayA[x] = 2.0 / size * sum;
+	}
+}
+
+
+__global__ void computeB(double* arrayB, double* arrayOfPoints, double* argumentsArray, int degree, int size)
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < degree + 1)
+	{
+		double sum = 0;
+
+		for (int i = 0; i < size; i++)	// petla do zrownoleglenia
+		{
+			sum += (arrayOfPoints[size + i] * sin(x * argumentsArray[i]));
+		}
+
+		arrayB[x] = 2.0 / size * sum;
+	}
+}
 
 void trigInterpolation(double *arrayOfPoints, int size)
 {
-	const double PI = 3.14159265358979323846264338327950288419;
-
+	const long double PI = std::acos(-1.L);
 	int degree = size / 2;
 	
 	double *arrayA, *arrayB, *argumentsArray;
+	double *d_arrayOfPoints, *d_arrayA, *d_arrayB, *d_argumentsArray;
 
 	arrayA = new double[degree+1];
 	arrayB = new double[degree+1];
+
 	argumentsArray = new double[size];
+
 	
-	for (int i = 0; i < size; ++i)	// nowa tablica, gdzie mnozenie argumentow przez 2pi/size
+
+
+	int size_bytes = size * 2 * sizeof(double);		// number of bytes allocated on device mem
+	int size_bytes_degree = degree + 1 * sizeof(double);
+	int size_bytes_args = size * sizeof(double);
+	dim3 threadsPerBlock(BLOCK_SIZE);
+	dim3 numBlocks((2 * size + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+
+	// Cuda allocation
+	auto err = cudaMalloc(&d_arrayOfPoints, size_bytes);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+	err = cudaMalloc(&d_arrayA, size_bytes_degree);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+	err = cudaMalloc(&d_arrayB, size_bytes_degree);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+	err = cudaMalloc(&d_argumentsArray, size_bytes/2);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+
+
+
+	// Arguments * 2Pi/size && filling values
+	for (int i = 0; i < size; ++i)	
 	{
 		argumentsArray[i] = ((2*PI)/(double)size) * arrayOfPoints[i];
 	}
 
 
+
+
+	// Cuda data copy
+	err = cudaMemcpy(d_arrayOfPoints, arrayOfPoints, size_bytes, cudaMemcpyHostToDevice);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+	err = cudaMemcpy(d_argumentsArray, argumentsArray, size_bytes_args, cudaMemcpyHostToDevice);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+	err = cudaMemcpy(d_arrayA, arrayA, size_bytes_degree, cudaMemcpyHostToDevice);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+	err = cudaMemcpy(d_arrayB, arrayB, size_bytes_degree, cudaMemcpyHostToDevice);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
 	// Main algorithm code
-	for (int i = 0; i < degree+1; i++)
-	{
-		double sum = 0;		
 
-		for (int j = 0; j < size; j++)	// petla do zrownoleglenia
-		{
-			sum += ( arrayOfPoints[size + j] * cos( (double)i * argumentsArray[ j ] ) );
-		}
 
-		arrayA[i] = 2.0 / size * sum;
-	}
 
-	for (int i = 0; i < degree + 1; i++)
-	{
-		double sum = 0;
+	//============== CUDA ==============
 
-		for (int j = 0; j < size; j++) // petla do zrownoleglenia
-		{
-			sum += (arrayOfPoints[size + j] * sin((double)i * argumentsArray[ j ] ) );
-		}
+	// Parameters A
+	computeA << < numBlocks, threadsPerBlock >> > (d_arrayA, d_arrayOfPoints, d_argumentsArray, degree, size);
 
-		arrayB[i] = 2.0 / size * sum;
-	}
+	err = cudaMemcpy(arrayA, d_arrayA, size_bytes_degree, cudaMemcpyDeviceToHost);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
+
+
+	// Parameters B	
+	computeB << < numBlocks, threadsPerBlock >> > (d_arrayB, d_arrayOfPoints, d_argumentsArray, degree, size);
+
+	err = cudaMemcpy(arrayB, d_arrayB, size_bytes_degree, cudaMemcpyDeviceToHost);
+	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
+
 
 	//==================================
-	// Test poprawnosci wynikow
+	// Results check
+
 	std::cout << "\n\n";
 	for (int i = 0; i < 3; i++)
 		std::cout << arrayA[i] << "\n";
@@ -68,7 +146,7 @@ void trigInterpolation(double *arrayOfPoints, int size)
 		if (arrayA[i] != 0)
 		{
 			std::cout << " + " << arrayA[i] << "*" << "cos( ";
-			if (i == 1)		// XD
+			if (i == 1)	
 				std::cout << "x )";
 			else
 				std::cout << i << "x )";
@@ -77,19 +155,26 @@ void trigInterpolation(double *arrayOfPoints, int size)
 		if (arrayB[i] != 0)
 		{
 			std::cout << " + " << arrayB[i] << "*" << "sin( ";
-			if (i == 1)		// XD * XD
+			if (i == 1)	
 				std::cout << "x )";
 			else
 				std::cout << i << "x )";
 		}
 	}
 
-	std::cout << " + " << arrayA[degree] / 2.0 << "*cos( " << degree << "x )\n\n";
+	if (size % 2)
+		std::cout << " + " << arrayA[degree]<< "*cos( " << degree << "x ) + " << arrayB[degree] << "sin( " << degree << "x )\n\n";
+	else
+		std::cout << " + " << arrayA[degree] / 2.0 << "*cos( " << degree << "x )\n\n";
 	
 	
 	delete[] arrayA;
 	delete[] arrayB;
 	delete[] argumentsArray;
+	cudaFree(d_argumentsArray);
+	cudaFree(d_arrayA);
+	cudaFree(d_arrayB);
+	cudaFree(d_arrayOfPoints);
 }
 
 void showMatrix(double *array, int size)
@@ -129,6 +214,3 @@ int main()
 	delete[] arrayOfPoints;
 	return 0;
 }
-
-
-
