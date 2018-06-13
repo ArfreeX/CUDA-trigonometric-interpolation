@@ -7,7 +7,7 @@
 #include <math.h>
 
 
-#define BLOCK_SIZE 8 // needs to be checked for proper values
+#define BLOCK_SIZE 512 // needs to be checked for proper values
 
 __global__ void computeA(double* arrayA, double* arrayOfPoints, double* argumentsArray, int degree, int size)
 {
@@ -48,20 +48,20 @@ void trigInterpolation(double *arrayOfPoints, int size)
 {
 	const long double PI = std::acos(-1.L);
 	int degree = size / 2;
-	
+
 	double *arrayA, *arrayB, *argumentsArray;
 	double *d_arrayOfPoints, *d_arrayA, *d_arrayB, *d_argumentsArray;
 
-	arrayA = new double[degree+1];
-	arrayB = new double[degree+1];
+	arrayA = new double[degree + 1];
+	arrayB = new double[degree + 1];
 
 	argumentsArray = new double[size];
 
-	
+
 
 
 	int size_bytes = size * 2 * sizeof(double);		// number of bytes allocated on device mem
-	int size_bytes_degree = degree + 1 * sizeof(double);
+	int size_bytes_degree = (degree + 1) * sizeof(double);
 	int size_bytes_args = size * sizeof(double);
 	dim3 threadsPerBlock(BLOCK_SIZE);
 	dim3 numBlocks((2 * size + BLOCK_SIZE - 1) / BLOCK_SIZE);
@@ -77,16 +77,16 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	err = cudaMalloc(&d_arrayB, size_bytes_degree);
 	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
-	err = cudaMalloc(&d_argumentsArray, size_bytes/2);
+	err = cudaMalloc(&d_argumentsArray, size_bytes / 2);
 	if (err != cudaSuccess) { std::cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << std::endl; }
 
 
 
 
 	// Arguments * 2Pi/size && filling values
-	for (int i = 0; i < size; ++i)	
+	for (int i = 0; i < size; ++i)
 	{
-		argumentsArray[i] = ((2*PI)/(double)size) * arrayOfPoints[i];
+		argumentsArray[i] = ((2 * PI) / (double)size) * arrayOfPoints[i];
 	}
 
 
@@ -130,6 +130,97 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	// Results check
 
 	std::cout << "\n\n";
+	for (int i = 0; i < degree; i++)
+		std::cout << arrayA[i] << "\n";
+	for (int i = 0; i < degree; i++)
+		std::cout << arrayB[i] << "\n";
+	//==================================
+
+
+	// wypisywanie algorytmu
+	std::cout << "\nUzyskana funkcja interpolujaca \n\nG(x) = ";
+	std::cout << arrayA[0] / 2.0;
+
+	for (int i = 1; i < degree; i++)
+	{
+		if (arrayA[i] != 0)
+		{
+			std::cout << " + " << arrayA[i] << "*" << "cos( ";
+			if (i == 1)
+				std::cout << "x )";
+			else
+				std::cout << i << "x )";
+		}
+
+		if (arrayB[i] != 0)
+		{
+			std::cout << " + " << arrayB[i] << "*" << "sin( ";
+			if (i == 1)
+				std::cout << "x )";
+			else
+				std::cout << i << "x )";
+		}
+	}
+
+	if (size % 2)
+		std::cout << " + " << arrayA[degree] << "*cos( " << degree << "x ) + " << arrayB[degree] << "sin( " << degree << "x )\n\n";
+	else
+		std::cout << " + " << arrayA[degree] / 2.0 << "*cos( " << degree << "x )\n\n";
+
+
+	delete[] arrayA;
+	delete[] arrayB;
+	delete[] argumentsArray;
+	cudaFree(d_argumentsArray);
+	cudaFree(d_arrayA);
+	cudaFree(d_arrayB);
+	cudaFree(d_arrayOfPoints);
+}
+
+void trigInterpolationScalar(double *arrayOfPoints, int size)
+{
+	const long double PI = std::acos(-1.L);
+
+	int degree = size / 2;
+	double *arrayA, *arrayB, *argumentsArray;
+
+	arrayA = new double[degree + 1];
+	arrayB = new double[degree + 1];
+	argumentsArray = new double[size];
+
+	for (int i = 0; i < size; ++i)	// nowa tablica, gdzie mnozenie argumentow przez 2pi/size
+	{
+		argumentsArray[i] = ((2 * PI) / (double)size) * arrayOfPoints[i];
+	}
+
+
+	// Main algorithm code
+	for (int i = 0; i < degree + 1; i++)
+	{
+		double sum = 0;
+
+		for (int j = 0; j < size; j++)	// petla do zrownoleglenia
+		{
+			sum += (arrayOfPoints[size + j] * cos((double)i * argumentsArray[j]));
+		}
+
+		arrayA[i] = 2.0 / size * sum;
+	}
+	for (int i = 0; i < degree + 1; i++)
+	{
+		double sum = 0;
+
+		for (int j = 0; j < size; j++) // petla do zrownoleglenia
+		{
+			sum += (arrayOfPoints[size + j] * sin((double)i * argumentsArray[j]));
+		}
+
+		arrayB[i] = 2.0 / size * sum;
+	}
+
+	//==================================
+	// Test poprawnosci wynikow
+	std::cout << "\n\n";
 	for (int i = 0; i < 3; i++)
 		std::cout << arrayA[i] << "\n";
 	for (int i = 0; i < 3; i++)
@@ -140,13 +231,13 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	// wypisywanie algorytmu
 	std::cout << "\nUzyskana funkcja interpolujaca \n\nG(x) = ";
 	std::cout << arrayA[0] / 2.0;
-	
+
 	for (int i = 1; i < degree; i++)
 	{
 		if (arrayA[i] != 0)
 		{
 			std::cout << " + " << arrayA[i] << "*" << "cos( ";
-			if (i == 1)	
+			if (i == 1)		// XD
 				std::cout << "x )";
 			else
 				std::cout << i << "x )";
@@ -155,7 +246,7 @@ void trigInterpolation(double *arrayOfPoints, int size)
 		if (arrayB[i] != 0)
 		{
 			std::cout << " + " << arrayB[i] << "*" << "sin( ";
-			if (i == 1)	
+			if (i == 1)		// XD * XD
 				std::cout << "x )";
 			else
 				std::cout << i << "x )";
@@ -163,19 +254,42 @@ void trigInterpolation(double *arrayOfPoints, int size)
 	}
 
 	if (size % 2)
-		std::cout << " + " << arrayA[degree]<< "*cos( " << degree << "x ) + " << arrayB[degree] << "sin( " << degree << "x )\n\n";
+		std::cout << " + " << arrayA[degree] << "*cos( " << degree << "x ) + " << arrayB[degree] << "sin( " << degree << "x )\n\n";
 	else
 		std::cout << " + " << arrayA[degree] / 2.0 << "*cos( " << degree << "x )\n\n";
-	
-	
+
+
 	delete[] arrayA;
 	delete[] arrayB;
 	delete[] argumentsArray;
-	cudaFree(d_argumentsArray);
-	cudaFree(d_arrayA);
-	cudaFree(d_arrayB);
-	cudaFree(d_arrayOfPoints);
 }
+
+
+void showMatrix(double *array, int size);
+double* readData(double* array, int &size);
+
+int main()
+{
+	double * arrayOfPoints = nullptr;
+	int size = 0;
+	arrayOfPoints = readData(arrayOfPoints, size);
+
+	showMatrix(arrayOfPoints, size);
+
+	trigInterpolation(arrayOfPoints, size);
+	trigInterpolationScalar(arrayOfPoints, size);
+	system("PAUSE");
+	delete[] arrayOfPoints;
+	return 0;
+}
+
+
+
+//==========================================================
+//==========================================================
+//==========================================================
+//==========================================================
+//==========================================================
 
 void showMatrix(double *array, int size)
 {
@@ -198,19 +312,4 @@ double* readData(double* array, int &size)
 	file.openFile();
 	array = file.readData(array, size);
 	return array;
-}
-
-int main()
-{
-	double * arrayOfPoints = nullptr;
-	int size = 0;
-	arrayOfPoints = readData(arrayOfPoints, size);
-
-	showMatrix(arrayOfPoints, size);
-
-	trigInterpolation(arrayOfPoints, size);
-	
-	system("PAUSE");
-	delete[] arrayOfPoints;
-	return 0;
 }
